@@ -1,10 +1,19 @@
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
+from docx.enum.text import WD_BREAK
+from docx.shared import Pt
+from docx.oxml.ns import qn
 import re
 import requests
 from bs4 import BeautifulSoup
 
 URL = "https://www.bible.com/bible/{version_id}/{book_code}.{chapter}"
+
+def configure_columns(document):
+    sectPr = document.sections[0]._sectPr
+    cols = sectPr.xpath("./w:cols")[0]
+    cols.set(qn("w:num"), "2")
+    cols.set(qn("w:space"), "10") # Set space between columns
 
 def add_styles(document):
     note = document.styles.add_style("note", style_type = WD_STYLE_TYPE.CHARACTER)
@@ -21,6 +30,15 @@ def add_styles(document):
     section_heading = document.styles.add_style("section_heading", style_type = WD_STYLE_TYPE.CHARACTER)
     section_heading.font.bold = True
 
+    regular_paragaph = document.styles.add_style("p", style_type = WD_STYLE_TYPE.PARAGRAPH)
+
+    quote_level_1 = document.styles.add_style("q1", style_type = WD_STYLE_TYPE.PARAGRAPH)
+    quote_level_1.paragraph_format.left_indent = Pt(15)
+    quote_level_1.paragraph_format.line_spacing = Pt(12)
+
+    quote_level_2 = document.styles.add_style("q2", style_type = WD_STYLE_TYPE.PARAGRAPH)
+    quote_level_2.paragraph_format.left_indent = Pt(30)
+    quote_level_2.paragraph_format.line_spacing = Pt(12)
 
 def add_verse_section(paragraph, verse_section_data):
     verse_section_type = re.findall("^ChapterContent_(.*)__.*$", verse_section_data["class"][0])[0]
@@ -62,6 +80,7 @@ formats = {
 
 doc = Document()
 
+configure_columns(doc)
 add_styles(doc)
 
 chapter_title = soup.find("div", class_=re.compile("ChapterContent_reader")).find("h1").getText()
@@ -90,19 +109,11 @@ class Footnotes:
 
 footnotes = Footnotes()
 
-indents = {
-    # "s1": 0,
-    "p": 0,
-    "q1": 20,
-    "q2": 40,
-}
-
 for chapter_section in chapter.find_all(recursive=False):
     section_type = re.findall("^ChapterContent_(.*)__.*$", chapter_section["class"][0])[0]
     print(f"#{section_type}")
     if section_type == "p" or section_type == "q1" or section_type == "q2":
-        doc_paragraph = doc.add_paragraph()
-        doc_paragraph.paragraph_format.left_indent = indents[section_type]
+        doc_paragraph = doc.add_paragraph(style=section_type)
         for paragraph_section in chapter_section.find_all(recursive=False):
             paragraph_section_type = re.findall("^ChapterContent_(.*)__.*$", paragraph_section["class"][0])[0]
             print(paragraph_section["class"],",",paragraph_section_type)
@@ -117,5 +128,6 @@ for chapter_section in chapter.find_all(recursive=False):
         heading.add_run(chapter_section.getText(), style="section_heading")
 
 doc.add_paragraph(footnotes.print_notes())
+doc.add_paragraph().add_run().add_break(WD_BREAK.COLUMN)
 
 doc.save("generated/out.docx")
