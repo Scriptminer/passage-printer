@@ -18,6 +18,10 @@ def add_styles(document):
 
     verse_content = document.styles.add_style("content", style_type = WD_STYLE_TYPE.CHARACTER)
 
+    section_heading = document.styles.add_style("section_heading", style_type = WD_STYLE_TYPE.CHARACTER)
+    section_heading.font.bold = True
+
+
 def add_verse_section(paragraph, verse_section_data):
     verse_section_type = re.findall("^ChapterContent_(.*)__.*$", verse_section_data["class"][0])[0]
     content = ""
@@ -29,15 +33,18 @@ def add_verse_section(paragraph, verse_section_data):
     paragraph.add_run(content, style=verse_section_type)
 
 
-response = requests.get(URL.format(version_id="113",book_code="EXO",chapter=3))
-page = response.content
+# response = requests.get(URL.format(version_id="113",book_code="PHP",chapter=2))
+# page = response.content
+
+with open("php.html", "rb") as f:
+    page = f.read()
 
 soup = BeautifulSoup(page)
 
 chapter = soup.find("div", class_=re.compile("ChapterContent_chapter"))
 
 formats = {
-    "chapter_heading": "# {content}\n", # Heading of Chapter
+    "chapter_heading": "{content}\n", # Heading of Chapter
     "s1": "## {content}", # Section heading
     "p": "{content}\n", # Paragraph
     "q1": "    {content}\n", # Indented quote
@@ -103,8 +110,11 @@ for chapter_section in chapter.find_all(recursive=False):
                 for verse_section in paragraph_section.find_all(recursive=False):
                     add_verse_section(doc_paragraph, verse_section)
             else:
-                print("UNEXPECTED PART OF SECTION")
+                print(f"UNEXPECTED PART OF SECTION: {paragraph_section}")
         # markdown_doc += formats[section_type].format(content=paragraph_text)
+    elif section_type == "s1":
+        heading = doc.add_paragraph()
+        heading.add_run(chapter_section.getText(), style="section_heading")
 
 doc.add_paragraph(footnotes.print_notes())
 
