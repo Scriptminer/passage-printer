@@ -36,7 +36,7 @@ def add_verse_section(paragraph, verse_section_data):
 # response = requests.get(URL.format(version_id="113",book_code="PHP",chapter=2))
 # page = response.content
 
-with open("php.html", "rb") as f:
+with open("generated/php.html", "rb") as f:
     page = f.read()
 
 soup = BeautifulSoup(page)
@@ -118,4 +118,4 @@ for chapter_section in chapter.find_all(recursive=False):
 
 doc.add_paragraph(footnotes.print_notes())
 
-doc.save("out.docx")
+doc.save("generated/out.docx")
