@@ -75,15 +75,30 @@ def add_styles(document):
     copyright.font.size = Pt(9)
     copyright.font.italic = True
 
-def add_verse_section(paragraph, verse_section_data, footnotes_handler):
+def add_verse_section(paragraph, verse_section_data, footnotes_handler, passage_pointer):
     verse_section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", verse_section_data["class"][0])[0]
-    content = ""
+    content = verse_section_data.getText()
+
+    if verse_section_type == "label":
+        passage_pointer.update_state(content)
+    
+    if passage_pointer.state != PassagePointer.IN_PASSAGE:
+        return
+    
+    if paragraph["paragraph"] == False:
+        add_heading_section(paragraph["doc"], passage_pointer.last_section, passage_pointer) # Add the previous heading
+        paragraph["paragraph"] = paragraph["create"](paragraph["doc"])
+    
     if verse_section_type == "note":
         content = f"[{footnotes_handler.add_note(verse_section_data)}]"
-    else:
-        content = verse_section_data.getText()
+    
+    paragraph["paragraph"].add_run(content, style=verse_section_type)
 
-    paragraph.add_run(content, style=verse_section_type)
+def add_heading_section(doc, heading_text, passage_pointer):
+    if heading_text and passage_pointer.state == PassagePointer.IN_PASSAGE:
+        heading = doc.add_paragraph(style="qa")
+        heading.add_run(heading_text, style="heading")
+    passage_pointer.update_last_section(heading_text)
 
 def add_end_break(doc, break_type=WD_BREAK.COLUMN):
     runs = doc.paragraphs[-1].runs
@@ -121,6 +136,27 @@ class CopyrightHandler:
     def get_copyright_statement(self, yvReader):
         copyright_block = yvReader.find("div", class_=re.compile("ChapterContent_version-copyright"))
         return copyright_block.getText() + "\n" + self.end_text
+
+class PassagePointer:
+    BEFORE_START = 0
+    IN_PASSAGE = 1
+    AFTER_END = 2
+
+    def __init__(self, start_verse, end_verse):
+        self.start_verse = start_verse
+        self.end_verse = end_verse
+        self.last_section = None
+        self.state = PassagePointer.BEFORE_START
+    
+    def update_last_section(self, section):
+        self.last_section = section
+    
+    def update_state(self, verse_text):
+        current_verse = int(verse_text)
+        if current_verse >= self.start_verse:
+            self.state = PassagePointer.IN_PASSAGE
+        if self.end_verse != -1 and current_verse > self.end_verse:
+            self.state = PassagePointer.AFTER_END
     
 def get_passage(version_id, book_code,chapter):
     fname = f"{version_id}.{book_code}.{chapter}.html"
@@ -143,11 +179,12 @@ def get_passage(version_id, book_code,chapter):
     
     return yvReader
 
-def add_passage(doc, version_id="113", book_code="PSA",chapter="119"):
+def add_passage(doc, version_id="113", book_code="PSA",chapter="119", start_verse=1, end_verse=-1):
     yvReader = get_passage(version_id, book_code, chapter)
 
     copyright_handler = CopyrightHandler(format_url(version_id, book_code, chapter))
     footnotes_handler = FootnoteHandler()
+    passage_pointer = PassagePointer(start_verse, end_verse)
 
     chapter = yvReader.find("div", class_=re.compile("ChapterContent_chapter"))
     chapter_title = yvReader.find("div", class_=re.compile("ChapterContent_reader")).find("h1").getText()
@@ -157,21 +194,28 @@ def add_passage(doc, version_id="113", book_code="PSA",chapter="119"):
     for chapter_section in chapter.find_all(recursive=False):
         section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", chapter_section["class"][0])[0]
         if section_type in ["p", "q1", "q2", "q3", "qa", "d", "pc", "m"]:
-            doc_paragraph = doc.add_paragraph(style=section_type)
+            doc_paragraph = {"paragraph": False, "doc": doc, "create": lambda doc: doc.add_paragraph(style=section_type)}
+            if passage_pointer.state == PassagePointer.IN_PASSAGE:
+                doc_paragraph["paragraph"] = doc_paragraph["create"](doc)
+            
             for paragraph_section in chapter_section.find_all(recursive=False):
                 paragraph_section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", paragraph_section["class"][0])[0]
                 if paragraph_section_type == "verse":
                     for verse_section in paragraph_section.find_all(recursive=False):
-                        add_verse_section(doc_paragraph, verse_section, footnotes_handler)
+                        add_verse_section(doc_paragraph, verse_section, footnotes_handler, passage_pointer)
+                        if passage_pointer.state == PassagePointer.AFTER_END: break
                 elif paragraph_section_type in ["content", "heading"]:
-                    add_verse_section(doc_paragraph, paragraph_section, footnotes_handler)
+                    add_verse_section(doc_paragraph, paragraph_section, footnotes_handler, passage_pointer)
                 else:
                     print(f"Unexpected part of section '{paragraph_section}' found.")
+                if passage_pointer.state == PassagePointer.AFTER_END: break
+            if passage_pointer.state == PassagePointer.AFTER_END: break
         elif section_type in ["s", "s1"]:
-            heading = doc.add_paragraph(style="qa")
-            heading.add_run(chapter_section.getText(), style="heading")
+            add_heading_section(doc, chapter_section.getText(), passage_pointer)
+            
         elif section_type == "b":
-            doc.add_paragraph(style="blank_line")
+            if passage_pointer.IN_PASSAGE:
+                doc.add_paragraph(style="blank_line")
         else:
             print(f"Unexpected section type '{section_type}' found.")
 
@@ -183,9 +227,9 @@ configure_columns(doc)
 add_styles(doc)
 
 for version in [101, 41, 139, 1819]:
-    add_passage(doc, version, "ACT", 17)
+    add_passage(doc, version, "ACT", 17, 9, 17)
     add_end_break(doc, WD_BREAK.COLUMN)
-    add_passage(doc, 113, "ACT", 17)
+    add_passage(doc, 113, "ACT", 17, 9, 17)
     add_end_break(doc, WD_BREAK.PAGE)
 
 doc.save("generated/out.docx")
