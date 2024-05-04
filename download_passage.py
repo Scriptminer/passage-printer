@@ -41,26 +41,6 @@ def configure_landscape_singular(doc):
     set_margin(section, Mm(15))
     return doc
 
-# def configure_portait_stacked(section):
-#     """ A4 Portrait page with top and bottom sections """
-#     margin = Mm(15)
-#     section.page_height, section.page_width = PAGE_SIZE["A4"]
-#     set_margin(section, margin)
-#     table = doc.add_table(rows=1, cols=2)
-#     table.rows[0].height = section.page_height - margin*2
-#     # table.columns[0].width = int(section.page_width*0.2 - margin)
-#     # table.columns[1].width = int(section.page_width*0.8 - margin)
-#     cell1, cell2 = table.cell(0,0), table.cell(0,1)
-
-    # Code from https://stackoverflow.com/questions/47738013/how-to-rotate-text-in-table-cells
-    for cell in [cell1, cell2]:
-        tc = cell._tc
-        tcPr = tc.get_or_add_tcPr()
-        textDirection = OxmlElement("w:textDirection")
-        textDirection.set(qn("w:val"), "btLr")
-        tcPr.append(textDirection)
-    return cell1, cell2
-
 def add_styles(document):
     note = document.styles.add_style("note", style_type = WD_STYLE_TYPE.CHARACTER)
     note.font.superscript = True
