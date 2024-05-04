@@ -185,7 +185,7 @@ class PassagePointer:
         if self.end_verse != -1 and current_verse > self.end_verse:
             self.state = PassagePointer.AFTER_END
     
-def get_passage(version_id, book_code,chapter):
+def get_passage(version_id, book_code, chapter):
     fname = f"{version_id}.{book_code}.{chapter}.html"
     yvReader = None
     if fname in os.listdir(CACHE_DIR):
@@ -249,15 +249,20 @@ def add_passage(doc, version_id="113", book_code="PSA",chapter="119", start_vers
     doc.add_paragraph(footnotes_handler.print_notes(), style="footnotes")
     doc.add_paragraph(copyright_handler.get_copyright_statement(yvReader), style="copyright")
 
-doc = Document()
-# configure_columns(doc)
-add_styles(doc)
+def generate_regular_cafe_handout(book_code, chapter, start_verse, end_verse):
+    doc = Document()
+    add_styles(doc)
+    for version in [101, 41, 139, 1819]:
+        section = doc.sections[-1]
+        section_1, section_2 = configure_portrait_parallel(doc)
+        add_passage(section_1, version, book_code, chapter, start_verse, end_verse)
+        add_passage(section_2, 113, book_code, chapter, start_verse, end_verse)
+        doc.add_section()
 
-for version in [101, 41, 139, 1819]:
-    section = doc.sections[-1]
-    section_1, section_2 = configure_portrait_parallel(doc)
-    add_passage(section_1, version, "ACT", 17, 1, -1)
-    add_passage(section_2, 113, "ACT", 17, 1, -1)
-    doc.add_section()
+    section = configure_portrait_singular(doc)
+    add_passage(section, 113, book_code, chapter, start_verse, end_verse)
+    
+    return doc
 
-doc.save("generated/out.docx")
+doc = generate_regular_cafe_handout("ACT", 17, 16, 34)
+doc.save("generated/Acts17.docx")
