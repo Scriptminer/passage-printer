@@ -1,7 +1,7 @@
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_BREAK
-from docx.shared import Pt
+from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
 import re
 import requests
@@ -25,37 +25,49 @@ def add_styles(document):
     small_caps = document.styles.add_style("sc", style_type = WD_STYLE_TYPE.CHARACTER)
     small_caps.font.small_caps = True
 
+    words_of_Jesus = document.styles.add_style("wj", style_type = WD_STYLE_TYPE.CHARACTER)
+    words_of_Jesus.font.color.rgb = RGBColor(255,0,0)
+
     verse_content = document.styles.add_style("content", style_type = WD_STYLE_TYPE.CHARACTER)
 
-    section_heading = document.styles.add_style("section_heading", style_type = WD_STYLE_TYPE.CHARACTER)
+    section_heading = document.styles.add_style("heading", style_type = WD_STYLE_TYPE.CHARACTER)
     section_heading.font.bold = True
 
     regular_paragaph = document.styles.add_style("p", style_type = WD_STYLE_TYPE.PARAGRAPH)
 
     quote_level_1 = document.styles.add_style("q1", style_type = WD_STYLE_TYPE.PARAGRAPH)
     quote_level_1.paragraph_format.left_indent = Pt(15)
-    quote_level_1.paragraph_format.line_spacing = Pt(12)
+    quote_level_1.paragraph_format.line_spacing = Pt(0)
 
     quote_level_2 = document.styles.add_style("q2", style_type = WD_STYLE_TYPE.PARAGRAPH)
     quote_level_2.paragraph_format.left_indent = Pt(30)
-    quote_level_2.paragraph_format.line_spacing = Pt(12)
+    quote_level_2.paragraph_format.line_spacing = Pt(0)
+
+    quote_level_3 = document.styles.add_style("q3", style_type = WD_STYLE_TYPE.PARAGRAPH)
+    quote_level_3.paragraph_format.left_indent = Pt(40)
+    quote_level_3.paragraph_format.line_spacing = Pt(0)
+
+    # Annotations, as in Psalm 119
+    quote_annotation = document.styles.add_style("qa", style_type = WD_STYLE_TYPE.PARAGRAPH)
+
+    blank_line = document.styles.add_style("blank_line", style_type = WD_STYLE_TYPE.PARAGRAPH)
 
 def add_verse_section(paragraph, verse_section_data):
-    verse_section_type = re.findall("^ChapterContent_(.*)__.*$", verse_section_data["class"][0])[0]
+    verse_section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", verse_section_data["class"][0])[0]
     content = ""
     if verse_section_type == "note":
         content = f"[{footnotes.add_note(verse_section_data)}]"
     else:
         content = verse_section_data.getText()
-    
+
     paragraph.add_run(content, style=verse_section_type)
 
 
-# response = requests.get(URL.format(version_id="113",book_code="PHP",chapter=2))
-# page = response.content
+response = requests.get(URL.format(version_id="113",book_code="PSA",chapter=119))
+page = response.content
 
-with open("generated/php.html", "rb") as f:
-    page = f.read()
+# with open("generated/php.html", "rb") as f:
+#     page = f.read()
 
 soup = BeautifulSoup(page)
 
@@ -110,22 +122,25 @@ class Footnotes:
 footnotes = Footnotes()
 
 for chapter_section in chapter.find_all(recursive=False):
-    section_type = re.findall("^ChapterContent_(.*)__.*$", chapter_section["class"][0])[0]
-    print(f"#{section_type}")
-    if section_type == "p" or section_type == "q1" or section_type == "q2":
+    section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", chapter_section["class"][0])[0]
+    if section_type in ["p", "q1", "q2", "q3", "qa", "d"]:
         doc_paragraph = doc.add_paragraph(style=section_type)
         for paragraph_section in chapter_section.find_all(recursive=False):
-            paragraph_section_type = re.findall("^ChapterContent_(.*)__.*$", paragraph_section["class"][0])[0]
-            print(paragraph_section["class"],",",paragraph_section_type)
+            paragraph_section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", paragraph_section["class"][0])[0]
             if paragraph_section_type == "verse":
                 for verse_section in paragraph_section.find_all(recursive=False):
                     add_verse_section(doc_paragraph, verse_section)
+            elif paragraph_section_type in ["content", "heading"]:
+                add_verse_section(doc_paragraph, paragraph_section)
             else:
-                print(f"UNEXPECTED PART OF SECTION: {paragraph_section}")
-        # markdown_doc += formats[section_type].format(content=paragraph_text)
+                print(f"Unexpected part of section '{paragraph_section}' found.")
     elif section_type == "s1":
         heading = doc.add_paragraph()
-        heading.add_run(chapter_section.getText(), style="section_heading")
+        heading.add_run(chapter_section.getText(), style="heading")
+    elif section_type == "b":
+        doc.add_paragraph(style="blank_line")
+    else:
+        print(f"Unexpected section type '{section_type}' found.")
 
 doc.add_paragraph(footnotes.print_notes())
 doc.add_paragraph().add_run().add_break(WD_BREAK.COLUMN)
