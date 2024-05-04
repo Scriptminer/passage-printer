@@ -1,0 +1,5 @@
+41; SIMPLIFIED CHINESE; 新译本 - Chinese New Version (CNV)
+101; ARABIC; كتاب الحياة - New Arabic Version (Ketab El Hayat)
+113; ENGLISH; The Holy Bible, New International Version® (Anglicised), NIV®
+139; TRADITIONAL CHINESE; 和合本修訂版 - Revised Chinese Union Version (RCUV)
+1819; JAPANESE; Seisho Shinkyoudoyaku © Japan Bible Society 日本聖書協会

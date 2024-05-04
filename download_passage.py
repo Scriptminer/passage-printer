@@ -32,14 +32,16 @@ def configure_portrait_singular(doc):
     section = doc.sections[-1]
     section.page_width, section.page_height = PAGE_SIZE["A5"]
     set_margin(section, Mm(15))
-    return doc
+    table = doc.add_table(rows=1, cols=1)
+    return table.cell(0,0)
 
 def configure_landscape_singular(doc):
     """ A5 landscape page """
     section = doc.sections[-1]
     section.page_height, section.page_width = PAGE_SIZE["A5"]
     set_margin(section, Mm(15))
-    return doc
+    table = doc.add_table(rows=1, cols=1)
+    return table.cell(0,0)
 
 def add_styles(document):
     note = document.styles.add_style("note", style_type = WD_STYLE_TYPE.CHARACTER)
@@ -162,7 +164,8 @@ class CopyrightHandler:
 
     def get_copyright_statement(self, yvReader):
         copyright_block = yvReader.find("div", class_=re.compile("ChapterContent_version-copyright"))
-        return copyright_block.getText() + "\n" + self.end_text
+        first_section = copyright_block.find("div", recursive=False)
+        return first_section.getText() + "\n" + self.end_text
 
 class PassagePointer:
     BEFORE_START = 0
@@ -253,7 +256,6 @@ def generate_regular_cafe_handout(book_code, chapter, start_verse, end_verse):
     doc = Document()
     add_styles(doc)
     for version in [101, 41, 139, 1819]:
-        section = doc.sections[-1]
         section_1, section_2 = configure_portrait_parallel(doc)
         add_passage(section_1, version, book_code, chapter, start_verse, end_verse)
         add_passage(section_2, 113, book_code, chapter, start_verse, end_verse)
