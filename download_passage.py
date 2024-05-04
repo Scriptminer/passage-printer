@@ -2,6 +2,7 @@ from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_BREAK, WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, Mm, RGBColor
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import os
 import re
@@ -18,12 +19,47 @@ PAGE_SIZE = {
 def set_margin(section, margin):
     section.left_margin, section.right_margin, section.top_margin, section.bottom_margin = [margin]*4
 
-def configure_portrait_parallel(section):
-    """ A4 Portrait page with left and right sections """
+def configure_portrait_parallel(doc):
+    """ A4 portrait page with left and right sections """
+    section = doc.sections[-1]
     section.page_width, section.page_height = PAGE_SIZE["A4"]
     set_margin(section, Mm(15))
     table = doc.add_table(rows=1, cols=2)
     return table.cell(0,0), table.cell(0,1)
+
+def configure_portrait_singular(doc):
+    """ A5 portrait page """
+    section = doc.sections[-1]
+    section.page_width, section.page_height = PAGE_SIZE["A5"]
+    set_margin(section, Mm(15))
+    return doc
+
+def configure_landscape_singular(doc):
+    """ A5 landscape page """
+    section = doc.sections[-1]
+    section.page_height, section.page_width = PAGE_SIZE["A5"]
+    set_margin(section, Mm(15))
+    return doc
+
+# def configure_portait_stacked(section):
+#     """ A4 Portrait page with top and bottom sections """
+#     margin = Mm(15)
+#     section.page_height, section.page_width = PAGE_SIZE["A4"]
+#     set_margin(section, margin)
+#     table = doc.add_table(rows=1, cols=2)
+#     table.rows[0].height = section.page_height - margin*2
+#     # table.columns[0].width = int(section.page_width*0.2 - margin)
+#     # table.columns[1].width = int(section.page_width*0.8 - margin)
+#     cell1, cell2 = table.cell(0,0), table.cell(0,1)
+
+    # Code from https://stackoverflow.com/questions/47738013/how-to-rotate-text-in-table-cells
+    for cell in [cell1, cell2]:
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        textDirection = OxmlElement("w:textDirection")
+        textDirection.set(qn("w:val"), "btLr")
+        tcPr.append(textDirection)
+    return cell1, cell2
 
 def add_styles(document):
     note = document.styles.add_style("note", style_type = WD_STYLE_TYPE.CHARACTER)
@@ -200,7 +236,7 @@ def add_passage(doc, version_id="113", book_code="PSA",chapter="119", start_vers
     chapter = yvReader.find("div", class_=re.compile("ChapterContent_chapter"))
     chapter_title = yvReader.find("div", class_=re.compile("ChapterContent_reader")).find("h1").getText()
 
-    doc.add_paragraph().add_run(chapter_title, style="chapter_heading")
+    doc.paragraphs[0].add_run(chapter_title, style="chapter_heading")
 
     for chapter_section in chapter.find_all(recursive=False):
         section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", chapter_section["class"][0])[0]
@@ -239,7 +275,7 @@ add_styles(doc)
 
 for version in [101, 41, 139, 1819]:
     section = doc.sections[-1]
-    section_1, section_2 = configure_portrait_parallel(section)
+    section_1, section_2 = configure_portrait_parallel(doc)
     add_passage(section_1, version, "ACT", 17, 1, -1)
     add_passage(section_2, 113, "ACT", 17, 1, -1)
     doc.add_section()
