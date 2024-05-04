@@ -159,13 +159,17 @@ class FootnoteHandler:
         return out
 
 class CopyrightHandler:
-    def __init__(self, url):
+    def __init__(self, url, custom_copyright_statement):
         self.end_text = f"Read more at {url}"
+        self.custom_copyright_statement = custom_copyright_statement
 
     def get_copyright_statement(self, yvReader):
-        copyright_block = yvReader.find("div", class_=re.compile("ChapterContent_version-copyright"))
-        first_section = copyright_block.find("div", recursive=False)
-        return first_section.getText() + "\n" + self.end_text
+        copyright_statement = self.custom_copyright_statement
+        if not copyright_statement:
+            copyright_block = yvReader.find("div", class_=re.compile("ChapterContent_version-copyright"))
+            first_section = copyright_block.find("div", recursive=False)
+            copyright_statement = first_section.getText()
+        return copyright_statement + "\n" + self.end_text
 
 class PassagePointer:
     BEFORE_START = 0
@@ -212,14 +216,23 @@ def get_passage(version_id, book_code, chapter):
 def add_passage(doc, version_id="113", book_code="PSA",chapter="119", start_verse=1, end_verse=-1):
     yvReader = get_passage(version_id, book_code, chapter)
 
-    copyright_handler = CopyrightHandler(format_url(version_id, book_code, chapter))
+    language_info = [None, "", None]
+    with open("custom_version_info.txt") as f:
+        for line in f.readlines():
+            parts = line.strip().split(";")
+            if parts[0] == str(version_id):
+                language_info = parts
+
+    copyright_handler = CopyrightHandler(format_url(version_id, book_code, chapter), language_info[2])
     footnotes_handler = FootnoteHandler()
     passage_pointer = PassagePointer(start_verse, end_verse)
 
     chapter = yvReader.find("div", class_=re.compile("ChapterContent_chapter"))
     chapter_title = yvReader.find("div", class_=re.compile("ChapterContent_reader")).find("h1").getText()
 
-    doc.paragraphs[0].add_run(chapter_title, style="chapter_heading")
+    doc.paragraphs[0].add_run(language_info[1], style="heading")
+    
+    doc.add_paragraph().add_run(chapter_title, style="chapter_heading")
 
     for chapter_section in chapter.find_all(recursive=False):
         section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", chapter_section["class"][0])[0]
