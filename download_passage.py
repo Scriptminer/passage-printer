@@ -13,7 +13,7 @@ def configure_columns(document):
     sectPr = document.sections[0]._sectPr
     cols = sectPr.xpath("./w:cols")[0]
     cols.set(qn("w:num"), "2")
-    cols.set(qn("w:space"), "10") # Set space between columns
+    cols.set(qn("w:space"), "30") # Set space between columns
 
 def add_styles(document):
     note = document.styles.add_style("note", style_type = WD_STYLE_TYPE.CHARACTER)
@@ -80,10 +80,9 @@ def add_verse_section(paragraph, verse_section_data, footnotes_handler):
     paragraph.add_run(content, style=verse_section_type)
 
 class Footnotes:
-    text_notes = []
-    next_note_label = "a"
-
     def __init__(self):
+        self.text_notes = []
+        self.next_note_label = "a"
         pass
     
     def add_note(self, footnote_section):
