@@ -71,6 +71,10 @@ def add_styles(document):
     footnotes = document.styles.add_style("footnotes", style_type = WD_STYLE_TYPE.PARAGRAPH)
     footnotes.font.size = Pt(9)
 
+    copyright = document.styles.add_style("copyright", style_type = WD_STYLE_TYPE.PARAGRAPH)
+    copyright.font.size = Pt(9)
+    copyright.font.italic = True
+
 def add_verse_section(paragraph, verse_section_data, footnotes_handler):
     verse_section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", verse_section_data["class"][0])[0]
     content = ""
@@ -87,7 +91,10 @@ def add_end_break(doc, break_type=WD_BREAK.COLUMN):
         doc.paragraphs[-1].add_run()
     doc.paragraphs[-1].runs[-1].add_break(break_type)
 
-class Footnotes:
+def format_url(version_id, book_code,chapter):
+    return URL.format(version_id=version_id,book_code=book_code,chapter=chapter)
+
+class FootnoteHandler:
     def __init__(self):
         self.text_notes = []
         self.next_note_label = "a"
@@ -107,29 +114,45 @@ class Footnotes:
         out = "\n".join([f"{label}: {note}" for label, note in self.text_notes])
         return out
 
-def add_passage(doc, version_id="113", book_code="PSA",chapter="119"):
+class CopyrightHandler:
+    def __init__(self, url):
+        self.end_text = f"Read more at {url}"
+
+    def get_copyright_statement(self, yvReader):
+        copyright_block = yvReader.find("div", class_=re.compile("ChapterContent_version-copyright"))
+        return copyright_block.getText() + "\n" + self.end_text
+    
+def get_passage(version_id, book_code,chapter):
     fname = f"{version_id}.{book_code}.{chapter}.html"
-    bibleReader = None
+    yvReader = None
     if fname in os.listdir(CACHE_DIR):
         print(f"Loading {fname} from cache.")
         with open(os.path.join(CACHE_DIR, fname), "r") as f:
-            bibleReader = BeautifulSoup(f.read())
+            yvReader = BeautifulSoup(f.read())
     else:
-        url = URL.format(version_id=version_id,book_code=book_code,chapter=chapter)
+        url = format_url(version_id, book_code, chapter)
         print(f"Loading from {url}")
         response = requests.get(url)
         page = response.content
         soup = BeautifulSoup(page)
-        bibleReader = soup.find("div", class_=re.compile("ChapterContent_bible-reader"))
+        yvReader = soup.find("div", class_=re.compile("ChapterContent_yv-bible-text"))
+
+        # Save to cache
         with open(os.path.join(CACHE_DIR, fname), "w", encoding="utf-8") as f:
-            f.write(str(bibleReader))
+            f.write(str(yvReader))
+    
+    return yvReader
 
-    chapter = bibleReader.find("div", class_=re.compile("ChapterContent_chapter"))
+def add_passage(doc, version_id="113", book_code="PSA",chapter="119"):
+    yvReader = get_passage(version_id, book_code, chapter)
 
-    chapter_title = bibleReader.find("div", class_=re.compile("ChapterContent_reader")).find("h1").getText()
+    copyright_handler = CopyrightHandler(format_url(version_id, book_code, chapter))
+    footnotes_handler = FootnoteHandler()
+
+    chapter = yvReader.find("div", class_=re.compile("ChapterContent_chapter"))
+    chapter_title = yvReader.find("div", class_=re.compile("ChapterContent_reader")).find("h1").getText()
+
     doc.add_paragraph().add_run(chapter_title, style="chapter_heading")
-
-    footnotes_handler = Footnotes()
 
     for chapter_section in chapter.find_all(recursive=False):
         section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", chapter_section["class"][0])[0]
@@ -153,6 +176,7 @@ def add_passage(doc, version_id="113", book_code="PSA",chapter="119"):
             print(f"Unexpected section type '{section_type}' found.")
 
     doc.add_paragraph(footnotes_handler.print_notes(), style="footnotes")
+    doc.add_paragraph(copyright_handler.get_copyright_statement(yvReader), style="copyright")
 
 doc = Document()
 configure_columns(doc)
