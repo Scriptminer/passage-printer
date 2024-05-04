@@ -1,7 +1,7 @@
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_BREAK, WD_ALIGN_PARAGRAPH
-from docx.shared import Pt, RGBColor
+from docx.shared import Pt, Mm, RGBColor
 from docx.oxml.ns import qn
 import os
 import re
@@ -10,12 +10,20 @@ from bs4 import BeautifulSoup
 
 CACHE_DIR = "cache"
 URL = "https://www.bible.com/bible/{version_id}/{book_code}.{chapter}"
+PAGE_SIZE = {
+    "A4": (Mm(210), Mm(297)),
+    "A5": (Mm(148), Mm(210)),
+}
 
-def configure_columns(document):
-    sectPr = document.sections[0]._sectPr
-    cols = sectPr.xpath("./w:cols")[0]
-    cols.set(qn("w:num"), "2")
-    cols.set(qn("w:space"), "30") # Set space between columns
+def set_margin(section, margin):
+    section.left_margin, section.right_margin, section.top_margin, section.bottom_margin = [margin]*4
+
+def configure_portrait_parallel(section):
+    """ A4 Portrait page with left and right sections """
+    section.page_width, section.page_height = PAGE_SIZE["A4"]
+    set_margin(section, Mm(15))
+    table = doc.add_table(rows=1, cols=2)
+    return table.cell(0,0), table.cell(0,1)
 
 def add_styles(document):
     note = document.styles.add_style("note", style_type = WD_STYLE_TYPE.CHARACTER)
@@ -67,6 +75,9 @@ def add_styles(document):
     quote_annotation.paragraph_format.space_after = Pt(0)
 
     blank_line = document.styles.add_style("blank_line", style_type = WD_STYLE_TYPE.PARAGRAPH)
+
+    table_vertical_two_column = document.styles.add_style("table_vertical_two_column", style_type = WD_STYLE_TYPE.TABLE)
+    table_vertical_two_column
 
     footnotes = document.styles.add_style("footnotes", style_type = WD_STYLE_TYPE.PARAGRAPH)
     footnotes.font.size = Pt(9)
@@ -223,13 +234,14 @@ def add_passage(doc, version_id="113", book_code="PSA",chapter="119", start_vers
     doc.add_paragraph(copyright_handler.get_copyright_statement(yvReader), style="copyright")
 
 doc = Document()
-configure_columns(doc)
+# configure_columns(doc)
 add_styles(doc)
 
 for version in [101, 41, 139, 1819]:
-    add_passage(doc, version, "ACT", 17, 9, 17)
-    add_end_break(doc, WD_BREAK.COLUMN)
-    add_passage(doc, 113, "ACT", 17, 9, 17)
-    add_end_break(doc, WD_BREAK.PAGE)
+    section = doc.sections[-1]
+    section_1, section_2 = configure_portrait_parallel(section)
+    add_passage(section_1, version, "ACT", 17, 1, -1)
+    add_passage(section_2, 113, "ACT", 17, 1, -1)
+    doc.add_section()
 
 doc.save("generated/out.docx")
