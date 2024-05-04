@@ -30,27 +30,36 @@ def add_styles(document):
 
     verse_content = document.styles.add_style("content", style_type = WD_STYLE_TYPE.CHARACTER)
 
-    section_heading = document.styles.add_style("heading", style_type = WD_STYLE_TYPE.CHARACTER)
-    section_heading.font.bold = True
+    heading = document.styles.add_style("heading", style_type = WD_STYLE_TYPE.CHARACTER)
+    heading.font.bold = True
+
+    chapter_heading = document.styles.add_style("chapter_heading", style_type = WD_STYLE_TYPE.CHARACTER)
+    chapter_heading.font.bold = True
+    chapter_heading.font.size = Pt(16)
 
     regular_paragaph = document.styles.add_style("p", style_type = WD_STYLE_TYPE.PARAGRAPH)
 
     quote_level_1 = document.styles.add_style("q1", style_type = WD_STYLE_TYPE.PARAGRAPH)
     quote_level_1.paragraph_format.left_indent = Pt(15)
-    quote_level_1.paragraph_format.line_spacing = Pt(0)
+    quote_level_1.paragraph_format.space_after = Pt(0)
 
     quote_level_2 = document.styles.add_style("q2", style_type = WD_STYLE_TYPE.PARAGRAPH)
     quote_level_2.paragraph_format.left_indent = Pt(30)
-    quote_level_2.paragraph_format.line_spacing = Pt(0)
+    quote_level_2.paragraph_format.space_after = Pt(0)
 
     quote_level_3 = document.styles.add_style("q3", style_type = WD_STYLE_TYPE.PARAGRAPH)
     quote_level_3.paragraph_format.left_indent = Pt(40)
-    quote_level_3.paragraph_format.line_spacing = Pt(0)
+    quote_level_3.paragraph_format.space_after = Pt(0)
 
-    # Annotations, as in Psalm 119
+    # Annotations, as in Psalm 119, and section headings
     quote_annotation = document.styles.add_style("qa", style_type = WD_STYLE_TYPE.PARAGRAPH)
+    quote_annotation.paragraph_format.space_before = Pt(12)
+    quote_annotation.paragraph_format.space_after = Pt(0)
 
     blank_line = document.styles.add_style("blank_line", style_type = WD_STYLE_TYPE.PARAGRAPH)
+
+    footnotes = document.styles.add_style("footnotes", style_type = WD_STYLE_TYPE.PARAGRAPH)
+    footnotes.font.size = Pt(9)
 
 def add_verse_section(paragraph, verse_section_data):
     verse_section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", verse_section_data["class"][0])[0]
@@ -63,32 +72,15 @@ def add_verse_section(paragraph, verse_section_data):
     paragraph.add_run(content, style=verse_section_type)
 
 
-response = requests.get(URL.format(version_id="113",book_code="PSA",chapter=119))
-page = response.content
+# response = requests.get(URL.format(version_id="113",book_code="PSA",chapter=119))
+# page = response.content
 
-# with open("generated/php.html", "rb") as f:
-#     page = f.read()
+with open("generated/php.html", "rb") as f:
+    page = f.read()
 
 soup = BeautifulSoup(page)
 
 chapter = soup.find("div", class_=re.compile("ChapterContent_chapter"))
-
-formats = {
-    "chapter_heading": "{content}\n", # Heading of Chapter
-    "s1": "## {content}", # Section heading
-    "p": "{content}\n", # Paragraph
-    "q1": "    {content}\n", # Indented quote
-    "q2": "       {content}\n", # Double indented quote
-    "qa": "*{content}*\n", # Quote heading (e.g., section titles in Psalm 119)
-    "b": "\n", # Blank line
-    "d": "", # Description, as in the Psalms
-
-    "wj": "<span color='red'>{content}</span>", # Words of Jesus
-    "label": "^{content}^", # Superscript verse label
-    "content": "{content}", # Regular Verse contents
-
-    "note_label": "^[{content}]^",
-}
 
 doc = Document()
 
@@ -96,7 +88,7 @@ configure_columns(doc)
 add_styles(doc)
 
 chapter_title = soup.find("div", class_=re.compile("ChapterContent_reader")).find("h1").getText()
-doc.add_heading(formats["chapter_heading"].format(content=chapter_title), level=1)
+doc.add_paragraph().add_run(chapter_title, style="chapter_heading")
 
 class Footnotes:
     text_notes = []
@@ -135,14 +127,14 @@ for chapter_section in chapter.find_all(recursive=False):
             else:
                 print(f"Unexpected part of section '{paragraph_section}' found.")
     elif section_type == "s1":
-        heading = doc.add_paragraph()
+        heading = doc.add_paragraph(style="qa")
         heading.add_run(chapter_section.getText(), style="heading")
     elif section_type == "b":
         doc.add_paragraph(style="blank_line")
     else:
         print(f"Unexpected section type '{section_type}' found.")
 
-doc.add_paragraph(footnotes.print_notes())
+doc.add_paragraph(footnotes.print_notes(), style="footnotes")
 doc.add_paragraph().add_run().add_break(WD_BREAK.COLUMN)
 
 doc.save("generated/out.docx")
