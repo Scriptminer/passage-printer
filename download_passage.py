@@ -3,10 +3,12 @@ from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_BREAK, WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
+import os
 import re
 import requests
 from bs4 import BeautifulSoup
 
+CACHE_DIR = "cache"
 URL = "https://www.bible.com/bible/{version_id}/{book_code}.{chapter}"
 
 def configure_columns(document):
@@ -79,6 +81,12 @@ def add_verse_section(paragraph, verse_section_data, footnotes_handler):
 
     paragraph.add_run(content, style=verse_section_type)
 
+def add_end_break(doc, break_type=WD_BREAK.COLUMN):
+    runs = doc.paragraphs[-1].runs
+    if len(runs) == 0:
+        doc.paragraphs[-1].add_run()
+    doc.paragraphs[-1].runs[-1].add_break(break_type)
+
 class Footnotes:
     def __init__(self):
         self.text_notes = []
@@ -100,17 +108,25 @@ class Footnotes:
         return out
 
 def add_passage(doc, version_id="113", book_code="PSA",chapter="119"):
-    print("VID: ", version_id)
-    response = requests.get(URL.format(version_id=version_id,book_code=book_code,chapter=chapter))
-    page = response.content
+    fname = f"{version_id}.{book_code}.{chapter}.html"
+    bibleReader = None
+    if fname in os.listdir(CACHE_DIR):
+        print(f"Loading {fname} from cache.")
+        with open(os.path.join(CACHE_DIR, fname), "r") as f:
+            bibleReader = BeautifulSoup(f.read())
+    else:
+        url = URL.format(version_id=version_id,book_code=book_code,chapter=chapter)
+        print(f"Loading from {url}")
+        response = requests.get(url)
+        page = response.content
+        soup = BeautifulSoup(page)
+        bibleReader = soup.find("div", class_=re.compile("ChapterContent_bible-reader"))
+        with open(os.path.join(CACHE_DIR, fname), "w", encoding="utf-8") as f:
+            f.write(str(bibleReader))
 
-    # with open("generated/php.html", "rb") as f:
-    #     page = f.read()
+    chapter = bibleReader.find("div", class_=re.compile("ChapterContent_chapter"))
 
-    soup = BeautifulSoup(page)
-    chapter = soup.find("div", class_=re.compile("ChapterContent_chapter"))
-
-    chapter_title = soup.find("div", class_=re.compile("ChapterContent_reader")).find("h1").getText()
+    chapter_title = bibleReader.find("div", class_=re.compile("ChapterContent_reader")).find("h1").getText()
     doc.add_paragraph().add_run(chapter_title, style="chapter_heading")
 
     footnotes_handler = Footnotes()
@@ -144,8 +160,8 @@ add_styles(doc)
 
 for version in [101, 41, 139, 1819]:
     add_passage(doc, version, "ACT", 17)
-    doc.add_paragraph().add_run().add_break(WD_BREAK.COLUMN)
+    add_end_break(doc, WD_BREAK.COLUMN)
     add_passage(doc, 113, "ACT", 17)
-    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+    add_end_break(doc, WD_BREAK.PAGE)
 
 doc.save("generated/out.docx")
