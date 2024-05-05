@@ -268,7 +268,7 @@ def add_passage(doc, version_id="113", book_code="PSA",chapter="119", start_vers
 def generate_regular_cafe_handout(book_code, chapter, start_verse, end_verse):
     doc = Document()
     add_styles(doc)
-    for version in [101, 41, 139, 1819]:
+    for version in [101, 41, 139, 1819, 73]:
         section_1, section_2 = configure_portrait_parallel(doc)
         add_passage(section_1, version, book_code, chapter, start_verse, end_verse)
         add_passage(section_2, 113, book_code, chapter, start_verse, end_verse)
@@ -279,5 +279,5 @@ def generate_regular_cafe_handout(book_code, chapter, start_verse, end_verse):
     
     return doc
 
-doc = generate_regular_cafe_handout("ACT", 17, 16, 34)
-doc.save("generated/Acts17.docx")
+doc = generate_regular_cafe_handout("JHN", 15, 1, -1)
+doc.save("generated/John15.docx")
