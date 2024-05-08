@@ -19,27 +19,19 @@ PAGE_SIZE = {
 def set_margin(section, margin):
     section.left_margin, section.right_margin, section.top_margin, section.bottom_margin = [margin]*4
 
-def configure_portrait_parallel(doc):
-    """ A4 portrait page with left and right sections """
+def configure_parallel(doc, page_size="A4", portrait=True, margin=Mm(15)):
+    """ Two column page """
     section = doc.sections[-1]
-    section.page_width, section.page_height = PAGE_SIZE["A4"]
-    set_margin(section, Mm(15))
+    section.page_width, section.page_height = PAGE_SIZE[page_size if portrait else page_size[::-1]]
+    set_margin(section, margin)
     table = doc.add_table(rows=1, cols=2)
     return table.cell(0,0), table.cell(0,1)
 
-def configure_portrait_singular(doc):
-    """ A5 portrait page """
+def configure_singular(doc, page_size="A4", portrait=True, margin=Mm(15)):
+    """ One column page """
     section = doc.sections[-1]
-    section.page_width, section.page_height = PAGE_SIZE["A5"]
-    set_margin(section, Mm(15))
-    table = doc.add_table(rows=1, cols=1)
-    return table.cell(0,0)
-
-def configure_landscape_singular(doc):
-    """ A5 landscape page """
-    section = doc.sections[-1]
-    section.page_height, section.page_width = PAGE_SIZE["A5"]
-    set_margin(section, Mm(15))
+    section.page_width, section.page_height = PAGE_SIZE[page_size if portrait else page_size[::-1]]
+    set_margin(section, margin)
     table = doc.add_table(rows=1, cols=1)
     return table.cell(0,0)
 
@@ -52,6 +44,10 @@ def add_styles(document):
 
     small_caps = document.styles.add_style("sc", style_type = WD_STYLE_TYPE.CHARACTER)
     small_caps.font.small_caps = True
+    small_caps_german = document.styles.add_style("nd", style_type = WD_STYLE_TYPE.CHARACTER)
+    small_caps_german.font.small_caps = True
+
+    words = document.styles.add_style("w", style_type = WD_STYLE_TYPE.CHARACTER) # Used in lversions like 2134 (Dhivehi)
 
     paragraph_caps = document.styles.add_style("pc", style_type = WD_STYLE_TYPE.PARAGRAPH)
     paragraph_caps.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -104,8 +100,18 @@ def add_styles(document):
     copyright.font.size = Pt(9)
     copyright.font.italic = True
 
+def resolve_version(version_name):
+    language_info = [None, "", None]
+    with open("custom_version_info.txt") as f:
+        for line in f.readlines():
+            parts = line.strip().split(";")
+            if version_name.lower() in parts[1].lower():
+                language_info = parts
+    return language_info[0]
+
 def add_verse_section(paragraph, verse_section_data, footnotes_handler, passage_pointer):
-    verse_section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", verse_section_data["class"][0])[0]
+    extracted_section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", verse_section_data["class"][0])
+    verse_section_type = extracted_section_type[0] if len(extracted_section_type) > 0 else verse_section_data["class"][0]
     content = verse_section_data.getText()
 
     if verse_section_type == "label":
@@ -213,7 +219,8 @@ def get_passage(version_id, book_code, chapter):
     
     return yvReader
 
-def add_passage(doc, version_id="113", book_code="PSA",chapter="119", start_verse=1, end_verse=-1):
+def add_passage(doc, version_id="113", book_code="MRK", chapter="1", start_verse=1, end_verse=-1):
+    print(f"Adding passage: {book_code} {chapter}:{start_verse}-{end_verse} ({version_id})")
     yvReader = get_passage(version_id, book_code, chapter)
 
     language_info = [None, "", None]
@@ -259,6 +266,7 @@ def add_passage(doc, version_id="113", book_code="PSA",chapter="119", start_vers
         elif section_type == "b":
             if passage_pointer.IN_PASSAGE:
                 doc.add_paragraph(style="blank_line")
+
         else:
             print(f"Unexpected section type '{section_type}' found.")
 
@@ -269,15 +277,36 @@ def generate_regular_cafe_handout(book_code, chapter, start_verse, end_verse):
     doc = Document()
     add_styles(doc)
     for version in [101, 41, 139, 1819, 73]:
-        section_1, section_2 = configure_portrait_parallel(doc)
+        section_1, section_2 = configure_parallel(doc, page_size="A4", portrait=True)
         add_passage(section_1, version, book_code, chapter, start_verse, end_verse)
         add_passage(section_2, 113, book_code, chapter, start_verse, end_verse)
         doc.add_section()
 
-    section = configure_portrait_singular(doc)
+    section = configure_singular(doc, page_size="A5", portrait=True)
     add_passage(section, 113, book_code, chapter, start_verse, end_verse)
     
     return doc
 
-doc = generate_regular_cafe_handout("JHN", 15, 1, -1)
-doc.save("generated/John15.docx")
+def generate_single_page(version, book_code, chapter, start_verse, end_verse):
+    doc = Document()
+    add_styles(doc)
+    cell = configure_singular(doc, page_size="A4", portrait=True)
+    add_passage(cell, version, book_code, chapter, start_verse, end_verse)
+    doc.add_section()
+
+    return doc
+
+def generate_verses_cutout_page(version_names, book_code, chapter, start_verse, end_verse):
+    doc = Document()
+    add_styles(doc)
+    for version_name in version_names:
+        cell = configure_singular(doc, page_size="A4", portrait=True)
+        add_passage(cell, resolve_version(version_name), book_code, chapter, start_verse, end_verse)
+        cell.add_paragraph()
+    
+    return doc
+
+# doc = generate_regular_cafe_handout("EXO", 3, 1, 15)
+
+doc = generate_verses_cutout_page(["MALDIVIAN"]*2 + ["SIMPLIFIED CHINESE"]*3 + ["ENGLISH"]*5 + ["GERMAN"]*1 + ["JAPANESE"]*1 + ["TRADITIONAL CHINESE"]*1, "JHN", 3, 15, 16)
+doc.save("generated/VersesPage.docx")

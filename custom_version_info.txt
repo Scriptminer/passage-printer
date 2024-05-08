@@ -4,3 +4,4 @@
 113; ENGLISH; The Holy Bible, New International Version® (Anglicised), NIV®
 139; TRADITIONAL CHINESE; 和合本修訂版 - Revised Chinese Union Version (RCUV)
 1819; JAPANESE; Seisho Shinkyoudoyaku © Japan Bible Society 日本聖書協会
+2134; MALDIVIAN / DHIVEHI; Kithaabul Muqaddhas is a translation of holy writings from the Tawrat (توراة) and Injeel (إنجيل) in the Dhivehi language (ދިވެހި ބަސް) © Wycliffe Bible Translators, Inc.
