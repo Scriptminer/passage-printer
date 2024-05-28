@@ -10,7 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 
 CACHE_DIR = "cache"
-URL = "https://www.bible.com/bible/{version_id}/{book_code}.{chapter}"
+URL_PATTERN = "https://www.bible.com/bible/{version_id}/{book_code}.{chapter}"
 PAGE_SIZE = {
     "A4": (Mm(210), Mm(297)),
     "A5": (Mm(148), Mm(210)),
@@ -118,7 +118,7 @@ def add_end_break(doc, break_type=WD_BREAK.COLUMN):
     doc.paragraphs[-1].runs[-1].add_break(break_type)
 
 def format_url(version_id, book_code,chapter):
-    return URL.format(version_id=version_id,book_code=book_code,chapter=chapter)
+    return URL_PATTERN.format(version_id=version_id,book_code=book_code,chapter=chapter)
 
 class FootnoteHandler:
     def __init__(self):
@@ -139,20 +139,6 @@ class FootnoteHandler:
     def print_notes(self):
         out = "\n".join([f"{label}: {note}" for label, note in self.text_notes])
         return out
-
-class CopyrightHandler:
-    def __init__(self, url, custom_copyright_statement, yvReader):
-        self.end_text = f"Read more at {url}"
-        self.custom_copyright_statement = custom_copyright_statement
-        self.yvReader = yvReader
-
-    def get_copyright_statement(self):
-        copyright_statement = self.custom_copyright_statement
-        if not copyright_statement:
-            copyright_block = self.yvReader.find("div", class_=re.compile("ChapterContent_version-copyright"))
-            first_section = copyright_block.find("div", recursive=False)
-            copyright_statement = first_section.getText()
-        return copyright_statement + "\n" + self.end_text
 
 class PassagePointer:
     BEFORE_START = 0
@@ -206,19 +192,19 @@ def get_passage(version_id, book_code, chapter):
 class Version:
     version_id = None
     name = "Holy Bible"
-    copyright_statement = None
+    custom_copyright_statement = None
 
     def __init__(self, version_id, version_information_file="custom_version_info.txt"):
         self.version_id = version_id
-        with open("custom_version_info.txt") as f:
+        with open(version_information_file) as f:
             for line_no, line in enumerate(f.readlines()):
                 parts = line.strip().split(";")
                 if len(parts) != 3:
                     print(f"Invalid version info file at line {line_no}. Expected '<version_id>;<name>;<copyright statement>', got '{line.strip()}'.")
                     continue
                 if parts[0] == str(version_id):
-                    self.name, self.copyright_statement = parts[1:]
-        if self.copyright_statement == None:
+                    self.name, self.custom_copyright_statement = parts[1:]
+        if self.custom_copyright_statement == None:
             print(f"Version information for version_id {self.version_id} missing, using defaults.")
     
     def __str__(self):
@@ -231,7 +217,8 @@ class Passage:
         print(f"Loading passage: {self}...")
 
         yvReader = get_passage(version_id, book_code, chapter)
-        self.copyright_handler = CopyrightHandler(format_url(version_id, book_code, chapter), self.version.copyright_statement, yvReader)
+        self.copyright_statement = self.get_copyright_statement(yvReader)
+        self.readmore_statement = f"Read more at {format_url(self.version.version_id, self.book_code, self.chapter)}"
         self.footnotes_handler = FootnoteHandler()
         self.passage_pointer = PassagePointer(start_verse, end_verse)
 
@@ -277,7 +264,7 @@ class Passage:
                 print(f"Unexpected section type '{section_type}' found. Section contents: {chapter_section}")
 
         doc.add_paragraph(self.footnotes_handler.print_notes(), style="footnotes")
-        doc.add_paragraph(self.copyright_handler.get_copyright_statement(), style="copyright")
+        doc.add_paragraph(self.copyright_statement + "\n" + self.readmore_statement, style="copyright")
 
     def add_verse_section(self, paragraph, verse_section_data, footnotes_handler, passage_pointer):
         extracted_section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", verse_section_data["class"][0])
@@ -307,6 +294,16 @@ class Passage:
             heading = paragraph.add_paragraph(style="qa")
             heading.add_run(heading_text, style="heading")
         passage_pointer.update_last_section(heading_text)
+
+    def get_copyright_statement(self, yvReader):
+        if self.version.custom_copyright_statement:
+            copyright_statement = self.version.custom_copyright_statement
+        else:
+            # Use copyright statement from bible.com directly
+            copyright_block = yvReader.find("div", class_=re.compile("ChapterContent_version-copyright"))
+            first_section = copyright_block.find("div", recursive=False)
+            copyright_statement = first_section.getText()
+        return copyright_statement
 
     def __str__(self):
         end_verse = "end" if self.end_verse == -1 else self.end_verse 
