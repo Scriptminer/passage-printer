@@ -170,14 +170,15 @@ class FootnoteHandler:
         return out
 
 class CopyrightHandler:
-    def __init__(self, url, custom_copyright_statement):
+    def __init__(self, url, custom_copyright_statement, yvReader):
         self.end_text = f"Read more at {url}"
         self.custom_copyright_statement = custom_copyright_statement
+        self.yvReader = yvReader
 
-    def get_copyright_statement(self, yvReader):
+    def get_copyright_statement(self):
         copyright_statement = self.custom_copyright_statement
         if not copyright_statement:
-            copyright_block = yvReader.find("div", class_=re.compile("ChapterContent_version-copyright"))
+            copyright_block = self.yvReader.find("div", class_=re.compile("ChapterContent_version-copyright"))
             first_section = copyright_block.find("div", recursive=False)
             copyright_statement = first_section.getText()
         return copyright_statement + "\n" + self.end_text
@@ -231,74 +232,98 @@ def get_passage(version_id, book_code, chapter):
     
     return yvReader
 
-def add_passage(doc, version_id="113", book_code="MRK", chapter="1", start_verse=1, end_verse=-1):
-    print(f"Adding passage: {book_code} {chapter}:{start_verse}-{end_verse} ({version_id})")
-    yvReader = get_passage(version_id, book_code, chapter)
+class Version:
+    version_id = None
+    name = "Holy Bible"
+    copyright_statement = None
 
-    language_info = [None, "", None]
-    with open("custom_version_info.txt") as f:
-        for line in f.readlines():
-            parts = line.strip().split(";")
-            if parts[0] == str(version_id):
-                language_info = parts
-
-    copyright_handler = CopyrightHandler(format_url(version_id, book_code, chapter), language_info[2])
-    footnotes_handler = FootnoteHandler()
-    passage_pointer = PassagePointer(start_verse, end_verse)
-
-    chapter = yvReader.find("div", class_=re.compile("ChapterContent_chapter"))
-    chapter_title = yvReader.find("div", class_=re.compile("ChapterContent_reader")).find("h1").getText()
-
-    doc.paragraphs[0].add_run(language_info[1], style="heading")
+    def __init__(self, version_id, version_information_file="custom_version_info.txt"):
+        self.version_id = version_id
+        with open("custom_version_info.txt") as f:
+            for line_no, line in enumerate(f.readlines()):
+                parts = line.strip().split(";")
+                if len(parts) != 3:
+                    print(f"Invalid version info file at line {line_no}. Expected '<version_id>;<name>;<copyright statement>', got '{line.strip()}'.")
+                    continue
+                if parts[0] == str(version_id):
+                    self.name, self.copyright_statement = parts[1:]
+        if self.copyright_statement == None:
+            print(f"Version information for version_id {self.version_id} missing, using defaults.")
     
-    doc.add_paragraph().add_run(chapter_title, style="chapter_heading")
+    def __str__(self):
+        return str(self.version_id)
 
-    for chapter_section in chapter.find_all(recursive=False):
-        section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", chapter_section["class"][0])[0]
-        if section_type in ["p", "q1", "q2", "q3", "qa", "d", "pc", "m"]:
-            doc_paragraph = {"paragraph": False, "doc": doc, "create": lambda doc: doc.add_paragraph(style=section_type)}
-            if passage_pointer.state == PassagePointer.IN_PASSAGE:
-                doc_paragraph["paragraph"] = doc_paragraph["create"](doc)
-            
-            for paragraph_section in chapter_section.find_all(recursive=False):
-                paragraph_section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", paragraph_section["class"][0])[0]
-                if paragraph_section_type == "verse":
-                    for verse_section in paragraph_section.find_all(recursive=False):
-                        add_verse_section(doc_paragraph, verse_section, footnotes_handler, passage_pointer)
-                        if passage_pointer.state == PassagePointer.AFTER_END: break
-                elif paragraph_section_type in ["content", "heading"]:
-                    add_verse_section(doc_paragraph, paragraph_section, footnotes_handler, passage_pointer)
-                else:
-                    print(f"Unexpected part of section '{paragraph_section}' found.")
-                if passage_pointer.state == PassagePointer.AFTER_END: break
-            if passage_pointer.state == PassagePointer.AFTER_END: break
-        elif section_type in ["s", "s1"]:
-            add_heading_section(doc, chapter_section.getText(), passage_pointer)
-            
-        elif section_type == "b":
-            if passage_pointer.IN_PASSAGE:
-                doc.add_paragraph(style="blank_line")
+class Passage:
+    def __init__(self, version_id="113", book_code="MRK", chapter="1", start_verse=1, end_verse=-1):
+        self.version = Version(version_id)
+        self.book_code, self.chapter, self.start_verse, self.end_verse = book_code, chapter, start_verse, end_verse
+        print(f"Loading passage: {self}...")
 
-        elif section_type == "label":
-            pass # Skip labels
+        yvReader = get_passage(version_id, book_code, chapter)
+        self.copyright_handler = CopyrightHandler(format_url(version_id, book_code, chapter), self.version.copyright_statement, yvReader)
+        self.footnotes_handler = FootnoteHandler()
+        self.passage_pointer = PassagePointer(start_verse, end_verse)
 
-        else:
-            print(f"Unexpected section type '{section_type}' found. Section contents: {chapter_section}")
+        self.chapter_content = yvReader.find("div", class_=re.compile("ChapterContent_chapter"))
+        self.chapter_title = yvReader.find("div", class_=re.compile("ChapterContent_reader")).find("h1").getText()
 
-    doc.add_paragraph(footnotes_handler.print_notes(), style="footnotes")
-    doc.add_paragraph(copyright_handler.get_copyright_statement(yvReader), style="copyright")
+        print(f"Loading passage {self} complete.")
+    
+    def write_to(self, doc, config=None):
+        doc.paragraphs[0].add_run(self.version.name, style="heading")
+        doc.add_paragraph().add_run(self.chapter_title, style="chapter_heading")
+
+        for chapter_section in self.chapter_content.find_all(recursive=False):
+            section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", chapter_section["class"][0])[0]
+            if section_type in ["p", "q1", "q2", "q3", "qa", "d", "pc", "m"]:
+                doc_paragraph = {"paragraph": False, "doc": doc, "create": lambda doc: doc.add_paragraph(style=section_type)}
+                if self.passage_pointer.state == PassagePointer.IN_PASSAGE:
+                    doc_paragraph["paragraph"] = doc_paragraph["create"](doc)
+                
+                for paragraph_section in chapter_section.find_all(recursive=False):
+                    paragraph_section_type = re.findall("^ChapterContent_([a-zA-Z0-9]*)_*.*$", paragraph_section["class"][0])[0]
+                    if paragraph_section_type == "verse":
+                        for verse_section in paragraph_section.find_all(recursive=False):
+                            add_verse_section(doc_paragraph, verse_section, self.footnotes_handler, self.passage_pointer)
+                            if self.passage_pointer.state == PassagePointer.AFTER_END: break
+                    elif paragraph_section_type in ["content", "heading"]:
+                        add_verse_section(doc_paragraph, paragraph_section, self.footnotes_handler, self.passage_pointer)
+                    else:
+                        print(f"Unexpected part of section '{paragraph_section}' found.")
+                    if self.passage_pointer.state == PassagePointer.AFTER_END: break
+                if self.passage_pointer.state == PassagePointer.AFTER_END: break
+            elif section_type in ["s", "s1"]:
+                add_heading_section(doc, chapter_section.getText(), self.passage_pointer)
+                
+            elif section_type == "b":
+                if self.passage_pointer.IN_PASSAGE:
+                    doc.add_paragraph(style="blank_line")
+
+            elif section_type == "label":
+                pass # Skip labels
+
+            else:
+                print(f"Unexpected section type '{section_type}' found. Section contents: {chapter_section}")
+
+        doc.add_paragraph(self.footnotes_handler.print_notes(), style="footnotes")
+        doc.add_paragraph(self.copyright_handler.get_copyright_statement(), style="copyright")
+
+
+    def __str__(self):
+        end_verse = "end" if self.end_verse == -1 else self.end_verse 
+        return f"{self.book_code} {self.chapter}:{self.start_verse}-{end_verse} ({self.version})"
 
 def generate_regular_cafe_handout(book_code, chapter, start_verse=1, end_verse=-1):
     doc = Document()
     add_styles(doc)
     for version in [101, 41, 139, 1819, 73]:
         section_1, section_2 = configure_parallel(doc, page_size="A4", portrait=True)
-        add_passage(section_1, version, book_code, chapter, start_verse, end_verse)
-        add_passage(section_2, 113, book_code, chapter, start_verse, end_verse)
+        Passage(version, book_code, chapter, start_verse, end_verse).write_to(section_1)
+        Passage(113, book_code, chapter, start_verse, end_verse).write_to(section_2)
         doc.add_section()
 
     section = configure_singular(doc, page_size="A5", portrait=True)
-    add_passage(section, 113, book_code, chapter, start_verse, end_verse)
+    Passage(113, book_code, chapter, start_verse, end_verse).write_to(section)
     
     return doc
 
@@ -306,7 +331,7 @@ def generate_single_page(version, book_code, chapter, start_verse=1, end_verse=-
     doc = Document()
     add_styles(doc)
     cell = configure_singular(doc, page_size="A4", portrait=True)
-    add_passage(cell, version, book_code, chapter, start_verse, end_verse)
+    Passage(version, book_code, chapter, start_verse, end_verse).write_to(cell)
     doc.add_section()
 
     return doc
@@ -316,13 +341,13 @@ def generate_verses_cutout_page(version_names, book_code, chapter, start_verse=1
     add_styles(doc)
     for version_name in version_names:
         cell = configure_singular(doc, page_size="A4", portrait=True)
-        add_passage(cell, resolve_version(version_name), book_code, chapter, start_verse, end_verse)
+        Passage(resolve_version(version_name), book_code, chapter, start_verse, end_verse).write_to(cell)
         cell.add_paragraph()
     
     return doc
 
-# doc = generate_regular_cafe_handout("EXO", 3, 1, 15)
-doc = generate_single_page(73, "EPH", 4)
+doc = generate_regular_cafe_handout("EXO", 3, 1, 15)
+# doc = generate_single_page(73, "EPH", 4)
 
 # doc = generate_verses_cutout_page(["MALDIVIAN"]*2 + ["SIMPLIFIED CHINESE"]*8 + ["ENGLISH"]*10 + ["GERMAN"]*1 + ["JAPANESE"]*1 + ["TRADITIONAL CHINESE"]*1, "JHN", 3, 16, 17)
 doc.save("generated/out.docx")
