@@ -101,6 +101,8 @@ def add_styles(document):
     copyright.font.italic = True
 
 def resolve_version(version_name):
+    if type(version_name) == int:
+        return version_name
     language_info = [None, "", None]
     with open("custom_version_info.txt") as f:
         for line in f.readlines():
@@ -127,7 +129,10 @@ def add_verse_section(paragraph, verse_section_data, footnotes_handler, passage_
     if verse_section_type == "note":
         content = f"[{footnotes_handler.add_note(verse_section_data)}]"
     
-    paragraph["paragraph"].add_run(content, style=verse_section_type)
+    try:
+        paragraph["paragraph"].add_run(content, style=verse_section_type)
+    except KeyError:
+        print(f"Encountered unexpected verse section type '{verse_section_type}' at v{passage_pointer}. Treating the following as plain text: '{content}'.")
 
 def add_heading_section(doc, heading_text, passage_pointer):
     if heading_text and passage_pointer.state == PassagePointer.IN_PASSAGE:
@@ -184,6 +189,7 @@ class PassagePointer:
 
     def __init__(self, start_verse, end_verse):
         self.start_verse = start_verse
+        self.current_verse = start_verse
         self.end_verse = end_verse
         self.last_section = None
         self.state = PassagePointer.BEFORE_START
@@ -192,11 +198,17 @@ class PassagePointer:
         self.last_section = section
     
     def update_state(self, verse_text):
-        current_verse = int(verse_text)
-        if current_verse >= self.start_verse:
+        self.set_current_verse(verse_text)
+        if self.current_verse >= self.start_verse:
             self.state = PassagePointer.IN_PASSAGE
-        if self.end_verse != -1 and current_verse > self.end_verse:
+        if self.end_verse != -1 and self.current_verse > self.end_verse:
             self.state = PassagePointer.AFTER_END
+
+    def set_current_verse(self, verse_text):
+        self.current_verse = int(verse_text)
+
+    def __str__(self):
+        return str(self.current_verse)
     
 def get_passage(version_id, book_code, chapter):
     fname = f"{version_id}.{book_code}.{chapter}.html"
@@ -267,13 +279,16 @@ def add_passage(doc, version_id="113", book_code="MRK", chapter="1", start_verse
             if passage_pointer.IN_PASSAGE:
                 doc.add_paragraph(style="blank_line")
 
+        elif section_type == "label":
+            pass # Skip labels
+
         else:
-            print(f"Unexpected section type '{section_type}' found.")
+            print(f"Unexpected section type '{section_type}' found. Section contents: {chapter_section}")
 
     doc.add_paragraph(footnotes_handler.print_notes(), style="footnotes")
     doc.add_paragraph(copyright_handler.get_copyright_statement(yvReader), style="copyright")
 
-def generate_regular_cafe_handout(book_code, chapter, start_verse, end_verse):
+def generate_regular_cafe_handout(book_code, chapter, start_verse=1, end_verse=-1):
     doc = Document()
     add_styles(doc)
     for version in [101, 41, 139, 1819, 73]:
@@ -287,7 +302,7 @@ def generate_regular_cafe_handout(book_code, chapter, start_verse, end_verse):
     
     return doc
 
-def generate_single_page(version, book_code, chapter, start_verse, end_verse):
+def generate_single_page(version, book_code, chapter, start_verse=1, end_verse=-1):
     doc = Document()
     add_styles(doc)
     cell = configure_singular(doc, page_size="A4", portrait=True)
@@ -296,7 +311,7 @@ def generate_single_page(version, book_code, chapter, start_verse, end_verse):
 
     return doc
 
-def generate_verses_cutout_page(version_names, book_code, chapter, start_verse, end_verse):
+def generate_verses_cutout_page(version_names, book_code, chapter, start_verse=1, end_verse=-1):
     doc = Document()
     add_styles(doc)
     for version_name in version_names:
@@ -307,6 +322,7 @@ def generate_verses_cutout_page(version_names, book_code, chapter, start_verse, 
     return doc
 
 # doc = generate_regular_cafe_handout("EXO", 3, 1, 15)
+doc = generate_single_page(73, "EPH", 4)
 
-doc = generate_verses_cutout_page(["MALDIVIAN"]*2 + ["SIMPLIFIED CHINESE"]*3 + ["ENGLISH"]*5 + ["GERMAN"]*1 + ["JAPANESE"]*1 + ["TRADITIONAL CHINESE"]*1, "JHN", 3, 15, 16)
-doc.save("generated/VersesPage.docx")
+# doc = generate_verses_cutout_page(["MALDIVIAN"]*2 + ["SIMPLIFIED CHINESE"]*8 + ["ENGLISH"]*10 + ["GERMAN"]*1 + ["JAPANESE"]*1 + ["TRADITIONAL CHINESE"]*1, "JHN", 3, 16, 17)
+doc.save("generated/out.docx")
