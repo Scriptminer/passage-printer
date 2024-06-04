@@ -3,8 +3,7 @@ import re
 from Version import Version
 from FootnoteHandler import FootnoteHandler
 from PassagePointer import PassagePointer
-from helpers import format_url
-from GetPassage import get_passage
+from PassageTools import get_passage, format_url
 
 class Passage:
     def __init__(self, version_id="113", book_code="MRK", chapter="1", start_verse=1, end_verse=-1):
