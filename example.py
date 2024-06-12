@@ -1,7 +1,7 @@
-from PrintoutFormats import generate_regular_cafe_handout, generate_single_page, generate_verses_cutout_page
+from PrintoutFormats import generate_regular_multilingual_handout, generate_multiversion_handout, generate_single_page, generate_verses_cutout_page
 from Passage import Passage
 
-doc = generate_regular_cafe_handout("EXO", 3, 1, 15)
+doc = generate_regular_multilingual_handout("EXO", 3, 1, 15)
 Passage(113, "JHN", 3, 1, 16).write_to(doc)
 # doc = generate_single_page(73, "EPH", 4)
 
