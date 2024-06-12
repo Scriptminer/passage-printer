@@ -2,7 +2,7 @@ from PrintoutFormats import generate_regular_multilingual_handout, generate_mult
 from Passage import Passage
 
 # Create a standard multilingual handout, such as for an "International Café" Bible study
-doc1 = generate_regular_multilingual_handout("EXO", 3, 1, 15)
+doc1 = generate_regular_multilingual_handout("GEN", 11, 1, 9)
 doc1.save("generated/example1.docx")
 
 # Create a printout, then add separate passages onto it
