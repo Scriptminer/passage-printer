@@ -37,6 +37,7 @@ def generate_verses_cutout_page(version_names, book_code, chapter, start_verse=1
     return doc
 
 doc = generate_regular_cafe_handout("EXO", 3, 1, 15)
+Passage(113, "JHN", 3, 1, 16).write_to(doc)
 # doc = generate_single_page(73, "EPH", 4)
 
 # doc = generate_verses_cutout_page(["MALDIVIAN"]*2 + ["SIMPLIFIED CHINESE"]*8 + ["ENGLISH"]*10 + ["GERMAN"]*1 + ["JAPANESE"]*1 + ["TRADITIONAL CHINESE"]*1, "JHN", 3, 16, 17)
